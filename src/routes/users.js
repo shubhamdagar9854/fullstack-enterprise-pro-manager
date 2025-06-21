@@ -169,4 +169,51 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// ==========================================
+// NEW FEATURE: User Status Toggle & Audit Log Tracking
+// ==========================================
+
+// 1. PATCH Route to activate/deactivate user status and flush Redis caches
+router.patch('/:id/status', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { status } = req.body; // Expected values: 'active' or 'suspended'/'inactive'
+
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+    if (!status || typeof status !== 'string') {
+      return res.status(400).json({ error: 'Status field is required and must be a string' });
+    }
+
+    // Updating status dynamically using COALESCE or direct update if your PostgreSQL schema supports status column
+    const result = await db.query(
+      'UPDATE users SET status = $1 WHERE id = $2 RETURNING *',
+      [status, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Invalidate Redis caches because user state has changed
+    await cache.del(`user:${id}`);
+    await cache.invalidateListCache();
+    await cache.invalidateSearchCache();
+
+    // Log the event metadata inside Redis for auditing purposes (expires in 24 hours)
+    const auditKey = `user:${id}:audit:logs`;
+    const logPayload = { action: 'STATUS_UPDATE', updatedTo: status, timestamp: new Date() };
+    await cache.set(auditKey, JSON.stringify(logPayload), { EX: 86400 });
+
+    res.json({ message: 'User status updated successfully', user: result.rows[0] });
+  } catch (error) {
+    // Fallback if status column does not exist in DB yet (graceful handling)
+    if (error.code === '42703') {
+      return res.status(400).json({ error: 'Status feature requires a status column in your PostgreSQL schema' });
+    }
+    sendError(res, error);
+  }
+});
+
 module.exports = router;
