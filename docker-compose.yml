@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+
+  user-service:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=secret123
+      - DB_NAME=userservice
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: secret123
+      POSTGRES_DB: userservice
+
+  redis:
+    image: redis:7-alpine
