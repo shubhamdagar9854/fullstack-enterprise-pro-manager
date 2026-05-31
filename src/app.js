@@ -21,6 +21,12 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK' });
 });
 
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
 // Factor 7 — Port Binding
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
