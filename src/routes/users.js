@@ -17,6 +17,33 @@ router.get('/', async (req, res) => {
     }
 });
 
+router.get('/search', async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q) {
+            return res.status(400).json({ error: 'Query parameter q is required' });
+        }
+
+        const cacheKey = `users:search:${q}`;
+        const cached = await cache.get(cacheKey);
+        if (cached) {
+            console.log('Search cache hit');
+            return res.json(JSON.parse(cached));
+        }
+
+        const likeQuery = `%${q}%`;
+        const result = await db.query(
+            'SELECT * FROM users WHERE name ILIKE $1 OR email ILIKE $1',
+            [likeQuery]
+        );
+
+        await cache.set(cacheKey, JSON.stringify(result.rows), 60);
+        res.json(result.rows);
+    } catch (error) {
+        sendError(res, error);
+    }
+});
+
 router.get('/:id', async (req, res) => {
     try {
         const { id } = req.params;
