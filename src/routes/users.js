@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const cache = require('../cache/redis');
+const { isValidEmail } = require('../utils/validation');
 
 const sendError = (res, error) => {
     console.error(error);
@@ -11,8 +12,8 @@ const sendError = (res, error) => {
 const invalidateSearchCache = async () => {
     try {
         const keys = await cache.keys('users:search:*');
-        if (keys.length > 0) {
-            await cache.del(keys);
+        for (const k of keys) {
+            try { await cache.del(k); } catch (e) { console.error('del key failed', k, e); }
         }
     } catch (err) {
         console.error('Failed to invalidate search cache:', err);
@@ -29,16 +30,25 @@ const invalidateListCache = async () => {
 
 router.get('/', async (req, res) => {
     try {
-        const cacheKey = 'users:all';
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 10));
+        const offset = (page - 1) * limit;
+
+        const cacheKey = `users:all:page:${page}:limit:${limit}`;
         const cached = await cache.get(cacheKey);
         if (cached) {
             console.log('Users list cache hit');
             return res.json(JSON.parse(cached));
         }
 
-        const result = await db.query('SELECT * FROM users');
-        await cache.set(cacheKey, JSON.stringify(result.rows), { EX: 60 });
-        res.json(result.rows);
+        const totalRes = await db.query('SELECT COUNT(*)::int AS total FROM users');
+        const total = totalRes.rows[0].total || 0;
+
+        const result = await db.query('SELECT * FROM users ORDER BY id LIMIT $1 OFFSET $2', [limit, offset]);
+
+        const payload = { data: result.rows, page, limit, total };
+        await cache.set(cacheKey, JSON.stringify(payload), { EX: 120 });
+        res.json(payload);
     } catch (error) {
         sendError(res, error);
     }
@@ -50,7 +60,6 @@ router.get('/search', async (req, res) => {
         if (!q) {
             return res.status(400).json({ error: 'Query parameter q is required' });
         }
-
         const cacheKey = `users:search:${q}`;
         const cached = await cache.get(cacheKey);
         if (cached) {
@@ -58,13 +67,21 @@ router.get('/search', async (req, res) => {
             return res.json(JSON.parse(cached));
         }
 
-        const likeQuery = `%${q}%`;
-        const result = await db.query(
-            'SELECT * FROM users WHERE name ILIKE $1 OR email ILIKE $1',
-            [likeQuery]
-        );
+        // Tokenize query and build ILIKE patterns for each token
+        const tokens = q.split(/\s+/).filter(Boolean);
+        const patterns = tokens.map(t => `%${t}%`);
 
-        await cache.set(cacheKey, JSON.stringify(result.rows), { EX: 60 });
+        let result;
+        if (patterns.length === 0) {
+            result = { rows: [] };
+        } else {
+            result = await db.query(
+                'SELECT * FROM users WHERE name ILIKE ANY($1) OR email ILIKE ANY($1)',
+                [patterns]
+            );
+        }
+
+        await cache.set(cacheKey, JSON.stringify(result.rows), { EX: 120 });
         res.json(result.rows);
     } catch (error) {
         sendError(res, error);
@@ -97,6 +114,9 @@ router.post('/', async (req, res) => {
         if (!name || !email) {
             return res.status(400).json({ error: 'Name and email are required' });
         }
+        if (!isValidEmail(email)) {
+            return res.status(400).json({ error: 'Invalid email format' });
+        }
 
         const result = await db.query('INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *', [name, email]);
         await invalidateListCache();
@@ -117,6 +137,10 @@ router.put('/:id', async (req, res) => {
 
         if (name === undefined && email === undefined) {
             return res.status(400).json({ error: 'At least one field must be provided for update' });
+        }
+
+        if (email !== undefined && !isValidEmail(email)) {
+            return res.status(400).json({ error: 'Invalid email format' });
         }
 
         const result = await db.query(
