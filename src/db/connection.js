@@ -1,11 +1,10 @@
 const { Pool } = require('pg');
+const config = require('../config');
 
-const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+const pool = new Pool(config.db);
+
+pool.on('error', (err) => {
+  console.error('Postgres idle client error:', err);
 });
 
 module.exports = pool;

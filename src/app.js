@@ -1,34 +1,26 @@
-require('dotenv').config();
 const express = require('express');
+const config = require('./config');
 const userRoutes = require('./routes/users');
+const requestLogger = require('./middleware/requestLogger');
+const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 
-// JSON samjhe app
 app.use(express.json());
+app.use(requestLogger);
 
-// Factor 11 — Logs (stdout pe)
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} → ${req.method} ${req.url}`);
-  next();
-});
-
-// Routes connect karo
 app.use('/users', userRoutes);
 
-// Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'OK' });
 });
 
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ error: 'Internal Server Error' });
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not Found' });
 });
 
-// Factor 7 — Port Binding
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`User Service chal raha hai port ${PORT} pe 🚀`);
+app.use(errorHandler);
+
+app.listen(config.port, () => {
+  console.log(`User Service is running on port ${config.port} 🚀`);
 });
