@@ -43,12 +43,4 @@ This starts:
 - `npm run migrate` – create `users` table
 - `npm run seed` – insert seed users
 
-## Endpoints
 
-- `GET /health`
-- `GET /users`
-- `GET /users/search?q=example`
-- `GET /users/:id`
-- `POST /users`
-- `PUT /users/:id`
-- `DELETE /users/:id`
