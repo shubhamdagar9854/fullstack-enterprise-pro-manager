@@ -36,11 +36,3 @@ This starts:
 - `postgres`
 - `redis`
 
-## Scripts
-
-- `npm start` – run the service
-- `npm run dev` – run with `nodemon`
-- `npm run migrate` – create `users` table
-- `npm run seed` – insert seed users
-
-
