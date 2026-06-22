@@ -10,29 +10,18 @@ A simple Node.js microservice for user management with PostgreSQL persistence an
 - Redis caching for list, search, and individual user reads
 - Environment validation at startup
 
-## Run locally
+## Prerequisites
 
-1. Copy `.env.example` to `.env` and update values.
-2. Install dependencies:
+Before running the application, make sure you have the following installed
+- Node.js (v18 or higher)
+- PostgreSQL
+- Redis
+- Docker (Optional)
+
+## Getting Started
+
+### Run Locally
+
+1. Copy the example environment file
    ```bash
-   npm install
-   ```
-3. Start the service:
-   ```bash
-   npm start
-   ```
-
-## Docker
-
-Run the stack with Docker Compose:
-
-```bash
-docker compose up --build
-```
-
-This starts:
-
-- `user-service` on port `3000`
-- `postgres`
-- `redis`
-
+   cp .env.example .env
